@@ -517,9 +517,9 @@ public class CCmakeGenerator {
     code.pr("pico_sdk_init()");
     code.newLine();
     code.pr("add_subdirectory(core)");
-    code.pr("target_link_libraries(core PUBLIC pico_stdlib)");
-    code.pr("target_link_libraries(core PUBLIC pico_multicore)");
-    code.pr("target_link_libraries(core PUBLIC pico_sync)");
+    code.pr("target_link_libraries(reactor-c PUBLIC pico_stdlib)");
+    code.pr("target_link_libraries(reactor-c PUBLIC pico_multicore)");
+    code.pr("target_link_libraries(reactor-c PUBLIC pico_sync)");
     code.newLine();
     code.pr("set(LF_MAIN_TARGET " + executableName + ")");
 
@@ -616,8 +616,8 @@ public class CCmakeGenerator {
     code.pr(")");
     code.newLine();
 
-    code.pr("target_include_directories(core PUBLIC ${CUBEMX_INCLUDE_DIRECTORIES})");
-    code.pr("target_compile_definitions(core PUBLIC ${MCU_MODEL} USE_HAL_DRIVER)");
+    code.pr("target_include_directories(reactor-c PUBLIC ${CUBEMX_INCLUDE_DIRECTORIES})");
+    code.pr("target_compile_definitions(reactor-c PUBLIC ${MCU_MODEL} USE_HAL_DRIVER)");
     code.newLine();
     code.newLine();
     code.newLine();
@@ -625,7 +625,7 @@ public class CCmakeGenerator {
 
     // setup compiler and linker options
     code.pr("# Compiler definitions for the STM32");
-    code.pr("target_compile_options(core PUBLIC\n" +
+    code.pr("target_compile_options(reactor-c PUBLIC\n" +
             "    ${CPU_PARAMETERS}\n" +
             "    -Wall\n" +
             "    -Wextra\n" +
