@@ -19,7 +19,7 @@ reactor Stop(
   =}
 
   reaction(shutdown) {=
-    lf_print("Stopped at tag (" PRINTF_TIME ", %d)", lf_time_logical_elapsed(), lf_tag().microstep);
+    lf_print("Stopped at tag " PRINTF_TAG "", lf_time_logical_elapsed(), lf_tag().microstep);
     if (lf_time_logical_elapsed() != 50000000LL || lf_tag().microstep != 1) {
         lf_print_error_and_exit("Expected stop tag to be (50ms, 1).");
     }

@@ -400,6 +400,7 @@ public class CCmakeGenerator {
     }
 
     // Set the compiler flags
+    cMakeCode.pr("target_compile_options(${LF_MAIN_TARGET} PUBLIC -Werror)");
     // We can detect a few common libraries and use the proper target_link_libraries to find them
     for (String compilerFlag : targetConfig.get(CompilerFlagsProperty.INSTANCE)) {
       messageReporter
