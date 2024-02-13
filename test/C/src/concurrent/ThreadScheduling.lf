@@ -1,0 +1,29 @@
+target C;
+
+preamble {=
+  #include "platform.h"
+=}
+
+main reactor {
+  reaction(startup) {=
+    lf_thread_t t = lf_thread_self();
+    if (t == 0) {
+      lf_print_error_and_exit("lf_thread_self failed");
+    }
+
+    lf_scheduling_policy_priority_t policy;
+    policy.base.policy = LF_SCHED_PRIORITY;
+    policy.priority = 80;
+    if (lf_thread_set_scheduling_policy(t, (lf_scheduling_policy_t *) &policy) != 0) {
+      lf_print_error_and_exit("lf_thread_set_scheduling_policy failed");
+    }
+
+    if(lf_thread_set_cpu(t, 1) != 0) {
+      lf_print_error_and_exit("lf_thread_set_cpu failed");
+    }
+
+    if(lf_thread_set_priority(t, 75) != 0) {
+      lf_print_error_and_exit("lf_thread_set_priority failed");
+    }  
+  =}
+}
