@@ -228,13 +228,6 @@ public class CCmakeGenerator {
     cMakeCode.pr("endif()");
 
     cMakeCode.pr("# Require C11");
-    switch (platformOptions.platform()) {
-      case STM32:
-        cMakeCode.pr("enable_language(C CXX ASM)");
-        break;
-      default:
-      break;
-    }
     cMakeCode.pr("set(CMAKE_C_STANDARD 11)");
     cMakeCode.pr("set(CMAKE_C_STANDARD_REQUIRED ON)");
     cMakeCode.newLine();
@@ -545,10 +538,6 @@ public class CCmakeGenerator {
   private static String setUpMainTargetStm32(
           boolean hasMain, String executableName, Stream<String> cSources, String[] boardProperties) {
     var code = new CodeBuilder();
-    code.pr("\n# ########################################################");
-    code.pr("\n# ############## [ Start STM32 main target] ##############");
-    code.pr("\n# ########################################################");
-    code.newLine();
     code.newLine();
 
     code.pr("add_subdirectory(core)");
@@ -663,10 +652,6 @@ public class CCmakeGenerator {
     code.newLine();
 
 
-    code.pr("\n# ######################################################");
-    code.pr("\n# ############## [ End STM32 main target] ##############");
-    code.pr("\n# ######################################################");
-    code.newLine();
 
     return code.toString();
   }
