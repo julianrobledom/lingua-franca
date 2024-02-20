@@ -558,9 +558,9 @@ public class CCmakeGenerator {
       code.pr("set(MCU_FAMILY STM32" + boardProperties[0].substring(0, 2) + "xx)");
       code.pr("set(MCU_MODEL STM32" + boardProperties[0].substring(0, 4) + "xx)");
     }
-
-
+    
     code.pr("set(CPU_PARAMETERS -mcpu=cortex-m4 -mthumb -mfpu=fpv4-sp-d16 -mfloat-abi=softfp)");
+    code.pr("enable_language(C CXX ASM");
     code.newLine();
 
     // Define linker and startup scropts
