@@ -44,6 +44,11 @@ class CppInstanceGenerator(
                 AttributeUtils.getEnclaveAttribute(this), AttributeSpec.EACH_ATTR
             ) ?: false
 
+        val Instantiation.workersParameter: String
+            get() = AttributeUtils.getAttributeParameter(
+                AttributeUtils.getEnclaveAttribute(this), AttributeSpec.WORKERS_ATTR
+            ) ?: "container->environment()->num_workers()"
+
         private val Instantiation.reactorType: String
             get() = if (reactor.isGeneric)
                 """${reactor.name}<${typeArgs.joinToString(", ") { it.toText() }}>"""
@@ -63,7 +68,7 @@ class CppInstanceGenerator(
             |  
             |  $enclaveWrapperClassName(const std::string& name, reactor::Reactor* container, $reactorType::Parameters&& params) {
             |    if (__lf_env == nullptr) {
-            |      __lf_env = std::make_unique<reactor::Environment>(container->fqn() + name, container->environment());
+            |      __lf_env = std::make_unique<reactor::Environment>(${workersParameter}, container->fqn() + name, container->environment());
             |    }
             |    __lf_instance = std::make_unique<$reactorType>(name, __lf_env.get(), std::forward<$reactorType::Parameters>(params));
             |  }
