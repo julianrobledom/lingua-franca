@@ -60,6 +60,7 @@ import org.lflang.target.property.TracePluginProperty;
 import org.lflang.target.property.TracingProperty;
 import org.lflang.target.property.VerifyProperty;
 import org.lflang.target.property.WorkersProperty;
+import org.lflang.target.property.GenerateEnclavesProperty;
 
 /**
  * Enumeration of targets and their associated properties.
@@ -620,7 +621,9 @@ public enum Target {
               Ros2Property.INSTANCE,
               RuntimeVersionProperty.INSTANCE,
               TracingProperty.INSTANCE,
-              WorkersProperty.INSTANCE);
+              WorkersProperty.INSTANCE,
+              GenerateEnclavesProperty.INSTANCE
+              );
       case Python ->
           config.register(
               AuthProperty.INSTANCE,

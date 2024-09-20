@@ -50,6 +50,7 @@ import org.lflang.MessageReporter;
 import org.lflang.analyses.uclid.UclidGenerator;
 import org.lflang.ast.ASTUtils;
 import org.lflang.ast.AstTransformation;
+//import org.lflang.ast.ToGraph;
 import org.lflang.generator.docker.DockerComposeGenerator;
 import org.lflang.generator.docker.DockerGenerator;
 import org.lflang.graph.InstantiationGraph;
@@ -60,9 +61,11 @@ import org.lflang.lf.LfFactory;
 import org.lflang.lf.Mode;
 import org.lflang.lf.Reaction;
 import org.lflang.lf.Reactor;
+import org.lflang.lf.Model;
 import org.lflang.target.Target;
 import org.lflang.target.TargetConfig;
 import org.lflang.target.property.FilesProperty;
+import org.lflang.target.property.GenerateEnclavesProperty;
 import org.lflang.target.property.SingleThreadedProperty;
 import org.lflang.target.property.VerifyProperty;
 import org.lflang.util.FileUtil;
@@ -236,6 +239,11 @@ public abstract class GeneratorBase extends AbstractLFValidator {
         targetConfig,
         messageReporter);
 
+    if (this.targetConfig.isSet(GenerateEnclavesProperty.INSTANCE)) {
+      createEnclaves();
+      System.exit(1);
+    }
+
     // Load target properties for all resources.
     allResources.forEach(r -> loadTargetProperties(r));
 
@@ -279,6 +287,16 @@ public abstract class GeneratorBase extends AbstractLFValidator {
         this.mainDef.setReactorClass(reactor);
       }
     }
+  }
+
+  protected void createEnclaves() {
+    Iterable<EObject> nodes =
+        IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
+    nodes = IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
+    /*for (Model model : Iterables.filter(nodes, Model.class)) {
+      var serializer = new ToGraph();
+      serializer.getTopLevelGraph(model);
+    }*/
   }
 
   /**

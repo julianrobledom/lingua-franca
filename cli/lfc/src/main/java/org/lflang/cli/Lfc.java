@@ -20,6 +20,7 @@ import org.lflang.target.property.CompilerProperty;
 import org.lflang.target.property.LoggingProperty;
 import org.lflang.target.property.NoCompileProperty;
 import org.lflang.target.property.NoSourceMappingProperty;
+import org.lflang.target.property.GenerateEnclavesProperty;
 import org.lflang.target.property.PrintStatisticsProperty;
 import org.lflang.target.property.RuntimeVersionProperty;
 import org.lflang.target.property.SchedulerProperty;
@@ -152,6 +153,12 @@ public class Lfc extends CliBase {
       arity = "0",
       description = "Do not map lines in generated code to LF sources.")
   private Boolean noSourceMapping;
+
+  @Option(
+    names = {"--generate-enclaves"},
+    arity = "0",
+    description = "Take a non enclave program and generate all possible combination of enclaves.")
+private Boolean generateEnclaves;
 
   /** Mutually exclusive options related to threading. */
   static class ThreadingMutuallyExclusive {
@@ -388,6 +395,7 @@ public class Lfc extends CliBase {
             new Argument<>(SchedulerProperty.INSTANCE, getScheduler()),
             new Argument<>(SingleThreadedProperty.INSTANCE, getSingleThreaded()),
             new Argument<>(TracingProperty.INSTANCE, getTracingOptions()),
-            new Argument<>(WorkersProperty.INSTANCE, getWorkers())));
+            new Argument<>(WorkersProperty.INSTANCE, getWorkers()),
+            new Argument<>(GenerateEnclavesProperty.INSTANCE, generateEnclaves)));
   }
 }
