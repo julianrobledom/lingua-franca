@@ -114,12 +114,16 @@ import org.lflang.lf.Action;
 
 
 
-public class ToGraph extends ToLf {
+public class GenerateAllEnclaves extends ToLf {
 
-    private MessageReporter reporter = new DefaultMessageReporter();
+    //private MessageReporter reporter = new DefaultMessageReporter();
     private static LfFactory factory = LfFactory.eINSTANCE;
-    public Reactor mainReactor;
-    public MessageReporter messageReporter;
+    //public Reactor mainReactor;
+    //public MessageReporter messageReporter;
+
+    public GenerateLFEnclaves(Model object){
+
+    }
 
     //@Override
     public MalleableString getTopLevelGraph(Model object) {
@@ -138,7 +142,7 @@ public class ToGraph extends ToLf {
 
       for (Reactor r : object.getReactors() ){
         if(r.isMain()){
-            mainReactor = r;
+            //mainReactor = r;
             // initialize adjacent matrix
             matSize = r.getInstantiations().size();
             int[][] adj_mat = new int[matSize][matSize];
@@ -226,9 +230,7 @@ public class ToGraph extends ToLf {
       // -------------------------------------------------------
       int counter = 0;
       List<Reactor> newReactors = new ArrayList<Reactor>();
-      
       List<Instantiation> alist = new ArrayList<Instantiation>();
-      System.out.println("Hello ");
 
       Map<Integer, Instantiation> map = new HashMap<Integer, Instantiation>();
       for (Instantiation instance: mainReactor2.getInstantiations()){
@@ -276,7 +278,6 @@ public class ToGraph extends ToLf {
           List<String> params2 = enclaveClass.getParameters().stream().map(Parameter::getName).collect(Collectors.toList());
           for(Parameter parameter: r2.getParameters()){
             if(!params2.contains(parameter.getName())){
-              System.out.println("parameter " + parameter.getName());
               enclaveClass.getParameters().add(EcoreUtil.copy(parameter));
             }
           }
@@ -293,7 +294,6 @@ public class ToGraph extends ToLf {
         for(VarRef left: c.getLeftPorts()){
           for(VarRef right: c.getRightPorts()){
             for(Reactor enclave: newReactors){
-              System.out.println("enclave " + enclave.getName());
               if(enclave.getInstantiations().contains(right.getContainer()) &&
                   enclave.getInstantiations().contains(left.getContainer())){
                 cc.add(c);
@@ -528,7 +528,6 @@ public class ToGraph extends ToLf {
                     if (!values[j].trim().isEmpty()){
                         number = Integer.parseInt(values[j]);
                         singleList.add(number);
-                        System.out.println(number);
                     }
                 }
                 listOfLists.add(singleList);
