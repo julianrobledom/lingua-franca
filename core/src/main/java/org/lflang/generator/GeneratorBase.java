@@ -50,7 +50,7 @@ import org.lflang.MessageReporter;
 import org.lflang.analyses.uclid.UclidGenerator;
 import org.lflang.ast.ASTUtils;
 import org.lflang.ast.AstTransformation;
-import org.lflang.ast.GenerateAllEnclaves;
+import org.lflang.ast.EnclavesGenerator;
 import org.lflang.generator.docker.DockerComposeGenerator;
 import org.lflang.generator.docker.DockerGenerator;
 import org.lflang.graph.InstantiationGraph;
@@ -294,8 +294,8 @@ public abstract class GeneratorBase extends AbstractLFValidator {
         IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
     nodes = IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
     for (Model model : Iterables.filter(nodes, Model.class)) {
-      var serializer = new GenerateAllEnclaves();
-      serializer.getTopLevelGraph(model);
+      var serializer = new EnclavesGenerator();
+      serializer.generateAll(model);
     }
   }
 
