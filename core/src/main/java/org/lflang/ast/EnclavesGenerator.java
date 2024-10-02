@@ -2,11 +2,19 @@ package org.lflang.ast;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.Optional;
+
+import org.eclipse.xtext.nodemodel.INode;
 import java.util.stream.Collectors;
 import org.eclipse.xtext.xbase.lib.IteratorExtensions;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.lflang.lf.Attribute;
+import org.lflang.lf.AttrParm;
 import org.lflang.lf.Assignment;
 import org.lflang.lf.Connection;
 import org.lflang.lf.Expression;
@@ -35,11 +43,19 @@ public class EnclavesGenerator {
   private static LfFactory factory = LfFactory.eINSTANCE;
   private ToLf lf = new ToLf();
   private GraphPartitioning gp = new GraphPartitioning();
+  private int enclaveCounter = 0;
+
+  // Useful maps for swithching between reactor classes and their corresponding instantiations
+  //private List<Reactor> newReactors = new ArrayList<Reactor>();
+  //private Map<Instantiation, Reactor> mapReactorInstToEnclave = new HashMap<Instantiation, Reactor>();
+  //private Map<Reactor, Instantiation> mapEnclaveReactorToEnclaveInst = new HashMap<Reactor, Instantiation>();
+  private Map<Integer, Instantiation> mapReactorIndexToReactorInst = new HashMap<Integer, Instantiation>();
 
   /* Generate a LF file for each generated enclave partitioning */
   public void generateAll(Model object) {
     int[][] adjMat = generateAdjacencyMatrix(object);
     List<List<List<Integer>>> enclaves = gp.findPartitions(adjMat);
+
     for (int i=0; i < enclaves.size(); i++){
         generateLF(object, enclaves.get(i), i);
     }
@@ -91,228 +107,38 @@ public class EnclavesGenerator {
   }
 
 
-  /*Generate output file for a given partitioning */
+  /* Generate output file for a given partitioning */
   public MalleableString generateLF(
     Model model, 
     List<List<Integer>> partitioning,
     Integer programCounter
   ) {
+      // create deep copy of the model
       Model object = EcoreUtil.copy(model);
-      Reactor mainReactor = findMainReactor(object);
+      enclaveCounter = 0;
 
-      // Useful maps for swithching between reactor classes and their corresponding instantiations
-      int counter = 0;
-      List<Reactor> newReactors = new ArrayList<Reactor>();
-      Map<Instantiation, Reactor> mapReactorInstToEnclave = new HashMap<Instantiation, Reactor>();
-      Map<Reactor, Instantiation> mapEnclaveReactorToEnclaveInst = new HashMap<Reactor, Instantiation>();
-      Map<Integer, Instantiation> mapReactorIndexToReactorInst = new HashMap<Integer, Instantiation>();
-
-      for (int i=0; i< mainReactor.getInstantiations().size(); i++){
-        mapReactorIndexToReactorInst.put(i, mainReactor.getInstantiations().get(i));
+      // this is useful because as we switch instantiations from main class to a given enclave
+      // the index of instantiations change
+      for (int i=0; i< findMainReactor(object).getInstantiations().size(); i++){
+        mapReactorIndexToReactorInst.put(i, findMainReactor(object).getInstantiations().get(i));
       }
 
+      List<Reactor> enclaveClasses = new ArrayList<Reactor>();
+      List<Instantiation> enclaveInstances = new ArrayList<Instantiation>();
       for (List<Integer> enclave : partitioning){
-        // keep count of created enclaves
-        counter++;
-
-        // create Reactor class and instantiation for enclave
-        Reactor enclaveClass = factory.createReactor();
-        enclaveClass.setName("enclave" + counter);
-        Instantiation enclaveInst = factory.createInstantiation();
-        enclaveInst.setReactorClass(enclaveClass);
-        enclaveInst.setName("encl" + counter);
-
-        // Add new reactor to the model
-        mainReactor.getInstantiations().add(enclaveInst);
-        object.getReactors().add(enclaveClass);
-
-        // Add new reactor to useful lists
-        newReactors.add(enclaveClass);
-        mapEnclaveReactorToEnclaveInst.put(enclaveClass, enclaveInst);
-
-
+        Instantiation enclaveInst = createEnclaveReactor(object);
+        Reactor enclaveClass = (Reactor) enclaveInst.getReactorClass();
+        List<Instantiation> reactorInstList = new ArrayList<Instantiation>();
         for (int reactorIndex: enclave) {
-          // get parameteres of reactors inside enclave and add them to the enclave instantiation
-          List<Assignment> assignmentList = mapReactorIndexToReactorInst.get(reactorIndex).getParameters();
-          List<Parameter> paramList = enclaveInst.getParameters().stream().map(Assignment::getLhs).collect(Collectors.toList());
-          List<String> paramsNames = paramList.stream().map(Parameter::getName).collect(Collectors.toList());
-          for(Assignment assignment: assignmentList){
-            if(!paramsNames.contains(assignment.getLhs().getName())){
-              enclaveInst.getParameters().add(EcoreUtil.copy(assignment));
-            }
-          }
-
-          enclaveClass.getInstantiations().add(mapReactorIndexToReactorInst.get(reactorIndex));
-
-          // get parameteres of reactors inside enclave and add them to the enclave class
-          // 
-          Reactor reactor = factory.createReactor();
-          for(Reactor r: object.getReactors()){
-            if(r.getName() == mapReactorIndexToReactorInst.get(reactorIndex).getReactorClass().getName()){
-              reactor = r;
-            }
-          }
-          paramsNames = enclaveClass.getParameters().stream().map(Parameter::getName).collect(Collectors.toList());
-          for(Parameter parameter: reactor.getParameters()){
-            if(!paramsNames.contains(parameter.getName())){
-              enclaveClass.getParameters().add(EcoreUtil.copy(parameter));
-            }
-          }
-
-          // create map
-          mapReactorInstToEnclave.put(mapReactorIndexToReactorInst.get(reactorIndex), enclaveClass);
+          reactorInstList.add(mapReactorIndexToReactorInst.get(reactorIndex));
         }
+        addReactorsToEnclave(enclaveClass, enclaveInst, reactorInstList, object);
+        addConnectionsInsideEnclave(enclaveClass, enclaveInst, reactorInstList, object);
+
+        enclaveClasses.add(enclaveClass);
+        enclaveInstances.add(enclaveInst);
       }
-
-      // Add connections inside enclaves
-      for (int i = 0; i < mainReactor.getConnections().size(); i++) {
-        Connection connection = mainReactor.getConnections().get(i);
-        for(VarRef left: connection.getLeftPorts()){
-          for(VarRef right: connection.getRightPorts()){
-            for(Reactor enclave: newReactors){
-              if(enclave.getInstantiations().contains(right.getContainer()) &&
-                  enclave.getInstantiations().contains(left.getContainer())){
-                enclave.getConnections().add(connection);
-              }
-            }
-          }
-        }
-      }
-
-      // Add connections between enclaves
-      List<Connection> connectionsBetweenEnclaves = new ArrayList<Connection>();
-      List<Connection> connectionsRemove = new ArrayList<Connection>();
-
-      for(Connection connection: mainReactor.getConnections()){
-        Connection newConnection = factory.createConnection();
-
-        for(VarRef left: connection.getLeftPorts()){
-          Reactor myEnclave = factory.createReactor();
-          Output output = factory.createOutput();
-          VarRef outputVar = factory.createVarRef();
-
-          // create port
-          myEnclave = mapReactorInstToEnclave.get(left.getContainer());
-          Instantiation myEnclaveInst = mapEnclaveReactorToEnclaveInst.get(myEnclave);
-          outputVar.setVariable(EcoreUtil.copy(left.getVariable()));
-          Port port = (Port) outputVar.getVariable();
-          if(left.getContainer().getWidthSpec() != null){
-            port.setWidthSpec(EcoreUtil.copy(left.getContainer().getWidthSpec()));
-          }
-          else if(((Port) left.getVariable()).getWidthSpec() != null){
-            port.setWidthSpec(EcoreUtil.copy(((Port) left.getVariable()).getWidthSpec()));
-          }
-          output = (Output) port;
-          mapReactorInstToEnclave.get(left.getContainer()).getOutputs().add(output);
-
-          // ----------------------------------------------------
-          if(output.getWidthSpec() != null){
-            List<Parameter> paramsLeft = myEnclaveInst.getParameters().stream().map(Assignment::getLhs).collect(Collectors.toList());
-            List<String> paramsNamesLeft = paramsLeft.stream().map(Parameter::getName).collect(Collectors.toList());
-
-            List<Initializer> paramsRight = myEnclaveInst.getParameters().stream().map(Assignment::getRhs).collect(Collectors.toList());
-            List<Expression> expressions = paramsRight.stream().map(Initializer::getExpr).collect(Collectors.toList());
-
-            List<Parameter> params2 = output.getWidthSpec().getTerms().stream().map(WidthTerm::getParameter).collect(Collectors.toList());
-            List<String> paramsNames2 = params2.stream().map(Parameter::getName).collect(Collectors.toList());
-
-
-            for(String s: paramsNames2){
-              Integer i = 0;
-              for(Expression exp: expressions){
-                if(exp instanceof ParameterReference){
-                  ParameterReference exp2 = (ParameterReference) exp;
-                  String name = exp2.getParameter().getName();
-                  if(name == s){
-                    i = expressions.indexOf(exp);
-                  }
-                }
-              }
-              Integer j = paramsNames2.indexOf(s);
-              Parameter jjj = params2.get(j);
-              jjj.setName(paramsLeft.get(i).getName());
-            }
-          }
-          // -------------------------------------------------------
-
-          // create connection inside enclave
-          Connection conn = factory.createConnection();
-          conn.getLeftPorts().add(EcoreUtil.copy(left));
-          conn.getRightPorts().add(outputVar);
-          myEnclave.getConnections().add(conn);
-
-          // create connection between enclaves
-          VarRef outputVar2 = EcoreUtil.copy(outputVar);
-          outputVar2.setContainer(myEnclaveInst);
-          newConnection.getLeftPorts().add(outputVar2);
-        }
-        for(VarRef right: connection.getRightPorts()){
-          Reactor myEnclave = factory.createReactor();
-          Input input = factory.createInput();
-          VarRef inputVar = factory.createVarRef();
-
-          // create port
-          myEnclave = mapReactorInstToEnclave.get(right.getContainer());
-          Instantiation myEnclaveInst = mapEnclaveReactorToEnclaveInst.get(myEnclave);
-          inputVar.setVariable(EcoreUtil.copy(right.getVariable()));
-          Port port = (Port) inputVar.getVariable();
-          if(right.getContainer().getWidthSpec() != null){
-            port.setWidthSpec(EcoreUtil.copy(right.getContainer().getWidthSpec()));
-          }
-          else if(((Port) right.getVariable()).getWidthSpec() != null){
-            port.setWidthSpec(EcoreUtil.copy(((Port) right.getVariable()).getWidthSpec()));
-          }
-          //port.setWidthSpec(EcoreUtil.copy(right.getContainer().getWidthSpec()));
-          input = (Input) port;
-          mapReactorInstToEnclave.get(right.getContainer()).getInputs().add(input);
-
-          // ----------------------------------------------------
-          if(input.getWidthSpec() != null){
-            List<Parameter> paramsLeft = myEnclaveInst.getParameters().stream().map(Assignment::getLhs).collect(Collectors.toList());
-            List<String> paramsNamesLeft = paramsLeft.stream().map(Parameter::getName).collect(Collectors.toList());
-
-            List<Initializer> paramsRight = myEnclaveInst.getParameters().stream().map(Assignment::getRhs).collect(Collectors.toList());
-            List<Expression> expressions = paramsRight.stream().map(Initializer::getExpr).collect(Collectors.toList());
-
-            List<Parameter> params2 = input.getWidthSpec().getTerms().stream().map(WidthTerm::getParameter).collect(Collectors.toList());
-            List<String> paramsNames2 = params2.stream().map(Parameter::getName).collect(Collectors.toList());
-
-
-            for(String s: paramsNames2){
-              Integer i = 0;
-              for(Expression exp: expressions){
-                if(exp instanceof ParameterReference){
-                  ParameterReference exp2 = (ParameterReference) exp;
-                  String name = exp2.getParameter().getName();
-                  if(name == s){
-                    i = expressions.indexOf(exp);
-                  }
-                }
-              }
-              Integer j = paramsNames2.indexOf(s);
-              Parameter jjj = params2.get(j);
-              jjj.setName(paramsLeft.get(i).getName());
-            }
-          }
-          // -------------------------------------------------------
-
-          Connection conn = factory.createConnection();
-          conn.getRightPorts().add(EcoreUtil.copy(right));
-          conn.getLeftPorts().add(inputVar);
-          myEnclave.getConnections().add(conn);
-
-          VarRef inputVar2 = EcoreUtil.copy(inputVar);
-          inputVar2.setContainer(myEnclaveInst);
-          newConnection.getRightPorts().add(inputVar2);
-        }
-        connectionsRemove.add(connection);
-        connectionsBetweenEnclaves.add(newConnection);
-      }
-
-      mainReactor.getConnections().removeAll(connectionsRemove);
-      for (Connection c: connectionsBetweenEnclaves){
-        mainReactor.getConnections().add(c);
-      }
+      addConnectionsBetweenEnclave(enclaveClasses, enclaveInstances, object);
 
       try{
         BufferedWriter writer = new BufferedWriter(new FileWriter("enclaves/enclaves_lf_" + programCounter + ".py"));
@@ -326,6 +152,254 @@ public class EnclavesGenerator {
       return lf.caseModel(object);
   }
 
+  public Instantiation createEnclaveReactor(Model object){
+    // create Reactor class and instantiation for enclave
+    Reactor enclaveClass = factory.createReactor();
+    enclaveClass.setName("enclave" + enclaveCounter);
+    Instantiation enclaveInst = factory.createInstantiation();
+    enclaveInst.setReactorClass(enclaveClass);
+    enclaveInst.setName("encl" + enclaveCounter);
+
+    // add enclave attribute
+    Attribute attribute = factory.createAttribute();
+    attribute.setAttrName("enclave");
+    AttrParm attrParm = factory.createAttrParm();
+    attrParm.setName("each");
+    attrParm.setValue("false");
+    attribute.getAttrParms().add(attrParm);
+    enclaveInst.getAttributes().add(attribute);
+
+    // Add new enclave reactor to the model
+    Reactor mainReactor = findMainReactor(object);
+    mainReactor.getInstantiations().add(enclaveInst);
+    object.getReactors().add(enclaveClass);
+
+    // keep count of created enclaves
+    enclaveCounter++;
+
+    return enclaveInst;
+  }
+
+
+  public void addReactorsToEnclave(Reactor enclaveClass, Instantiation enclaveInst, List<Instantiation> reactorInst, Model object) {
+
+    List<Parameter> parameters = new ArrayList<Parameter>();
+    List<Assignment> assignments = new ArrayList<Assignment>();
+    List<Expression> expressions = new ArrayList<Expression>();
+    List<ParameterReference> parRefs = new ArrayList<ParameterReference>();
+    List<Parameter> parRight = new ArrayList<Parameter>();
+
+    for(int i=0; i < reactorInst.size(); i++){
+      List<Parameter> paramsClass = ((Reactor) reactorInst.get(i).getReactorClass()).getParameters();
+      List<Assignment> assignmentList = reactorInst.get(i).getParameters();
+      List<Parameter> paramsLeft = reactorInst.get(i).getParameters().stream().map(Assignment::getLhs).collect(Collectors.toList());
+      List<Initializer> paramsRight = reactorInst.get(i).getParameters().stream().map(Assignment::getRhs).collect(Collectors.toList());
+      List<Expression> exps = paramsRight.stream().map(Initializer::getExpr).collect(Collectors.toList());
+
+      for(int j=0; j < exps.size(); j++){
+        if(exps.get(j) instanceof ParameterReference){
+          ParameterReference pr = (ParameterReference) exps.get(j);
+          if(!parRefs.contains(pr)){
+            assignments.add(assignmentList.get(j));
+            expressions.add(exps.get(j));
+            parRefs.add(pr);
+            parRight.add(pr.getParameter());
+            parameters.add(paramsLeft.get(j));
+          }
+
+          Parameter newParam = EcoreUtil.copy(paramsLeft.get(j));
+          Assignment newAssignment = factory.createAssignment();
+          Initializer newInit = factory.createInitializer();
+          ParameterReference newPr = factory.createParameterReference();
+          newPr.setParameter(paramsLeft.get(j));
+          newInit.setAssign(true);
+          newInit.setExpr((Expression) newPr);
+          newAssignment.setLhs(newParam);
+          newAssignment.setRhs(newInit);
+
+          ((Reactor) reactorInst.get(i).getReactorClass()).getParameters().add(newParam);
+          reactorInst.get(i).getParameters().add(newAssignment);
+        }
+      }
+    }
+
+    for(int i=0; i < reactorInst.size(); i++){
+      if(reactorInst.get(i).getWidthSpec() != null){
+        List<Parameter> paramsWidth = reactorInst.get(i).getWidthSpec().getTerms().stream()
+          .map(WidthTerm::getParameter).collect(Collectors.toList());
+        Parameter p = paramsWidth.get(0);
+        if(!parRight.contains(p)){
+
+          Assignment assignment = factory.createAssignment();
+          assignment.setLhs(EcoreUtil.copy(p));
+          Initializer initializer = factory.createInitializer();
+          ParameterReference paramRef = factory.createParameterReference();
+          paramRef.setParameter(p);
+          initializer.setExpr((Expression) paramRef);
+          initializer.setAssign(true);
+          assignment.setRhs(initializer);
+
+          assignments.add(assignment);
+          parameters.add(p);
+        }
+        else{
+          int index = parRight.indexOf(p);
+          reactorInst.get(i).getWidthSpec().getTerms().get(0).setParameter(parameters.get(index));
+        }
+      }
+    } 
+
+    for(int i=0; i < parameters.size(); i++){
+      enclaveClass.getParameters().add(parameters.get(i));
+      //enclaveInst.getParameters().add(EcoreUtil.copy(assignments.get(i)));
+      enclaveInst.getParameters().add(assignments.get(i));
+    }
+
+    for(Instantiation inst: reactorInst){
+      enclaveClass.getInstantiations().add(inst);
+    }
+  }
+
+  public void addConnectionsInsideEnclave(Reactor enclaveClass, Instantiation enclaveInst, List<Instantiation> reactorInst, Model object){
+    // Add connections between inner reactors
+    Reactor mainReactor = findMainReactor(object);
+    for (int i=0; i< mainReactor.getConnections().size(); i++) {
+      Connection connection = mainReactor.getConnections().get(i);
+      for(VarRef left: connection.getLeftPorts()){
+        for(VarRef right: connection.getRightPorts()){
+          if(reactorInst.contains(right.getContainer()) && reactorInst.contains(left.getContainer())){
+            enclaveClass.getConnections().add(connection);
+          }
+        }
+      }
+    }
+
+    // already connected ports
+    List<Input> connectedInputs = new ArrayList<Input>();
+    List<Output> connectedOutputs = new ArrayList<Output>();
+    for(Connection connection: enclaveClass.getConnections()){
+      // find outputs already connected
+      for(VarRef left: connection.getLeftPorts()){
+        Reactor reactor = (Reactor) left.getContainer().getReactorClass();
+        for (Output output: reactor.getOutputs()){
+          if(output.getName() == left.getVariable().getName()){
+            connectedOutputs.add(output);
+          }
+        }
+      }
+
+      for(VarRef right: connection.getRightPorts()){
+        Reactor reactor = (Reactor) right.getContainer().getReactorClass();
+        for (Input input: reactor.getInputs()){
+          if(input.getName() == right.getVariable().getName()){
+            connectedInputs.add(input);
+          }
+        }
+      }
+    }
+
+    for(Instantiation inst: reactorInst){
+      Reactor reactor = (Reactor) inst.getReactorClass();
+      for(Input input: reactor.getInputs()){
+        if(!connectedInputs.contains(input)){
+          Input newInput = EcoreUtil.copy(input);
+          if(inst.getWidthSpec() != null){
+            //newInput.setWidthSpec(EcoreUtil.copy(inst.getWidthSpec()));
+            newInput.setWidthSpec(inst.getWidthSpec());
+          }
+          enclaveClass.getInputs().add(newInput);
+
+          // create connection between enclave's ports and reactor
+          Connection newConnection = factory.createConnection();
+          VarRef left = factory.createVarRef();
+          left.setVariable(newInput);
+          newConnection.getLeftPorts().add(left);
+
+          VarRef right = factory.createVarRef();
+          right.setContainer(inst);
+          right.setVariable(input);
+          newConnection.getRightPorts().add(right);
+
+          enclaveClass.getConnections().add(newConnection);
+        }
+      }
+      for(Output output: reactor.getOutputs()){
+        if(!connectedOutputs.contains(output)){
+          Output newOutput = EcoreUtil.copy(output);
+          if(inst.getWidthSpec() != null){
+            newOutput.setWidthSpec(inst.getWidthSpec());
+          }
+          enclaveClass.getOutputs().add(newOutput);
+
+          // create connection between enclave's ports and reactor
+          Connection newConnection = factory.createConnection();
+          VarRef left = factory.createVarRef();
+          left.setContainer(inst);
+          left.setVariable(output);
+          newConnection.getLeftPorts().add(left);
+
+          VarRef right = factory.createVarRef();
+          right.setVariable(newOutput);
+          newConnection.getRightPorts().add(right);
+
+          enclaveClass.getConnections().add(newConnection);
+        }
+      }
+    }
+  }
+
+
+  public void addConnectionsBetweenEnclave(List<Reactor> enclaveClasses, List<Instantiation> enclaveInstances, Model object) {
+    // Add connections between enclaves
+    Reactor mainReactor = findMainReactor(object);
+    List<Connection> newConnections = new ArrayList<Connection>();
+    List<Connection> connectionsRemove = new ArrayList<Connection>();
+
+    for(int i=0; i<mainReactor.getConnections().size(); i++){
+      Connection newConnection = factory.createConnection();
+      Reactor leftEnclaveClass;
+      Instantiation leftEnclaveInst;
+      for(VarRef left: mainReactor.getConnections().get(i).getLeftPorts()){
+        for(Instantiation enclaveInst: enclaveInstances){
+          if(((Reactor) enclaveInst.getReactorClass()).getInstantiations().contains(left.getContainer())){
+            leftEnclaveClass = (Reactor) enclaveInst.getReactorClass();
+
+            for(Output output: leftEnclaveClass.getOutputs()){
+              if(output.getName() == left.getVariable().getName()){
+                VarRef newLeft = factory.createVarRef();
+                newLeft.setContainer(enclaveInst);
+                newLeft.setVariable(output);
+                newConnection.getLeftPorts().add(newLeft);
+              }
+            }
+          }
+        }
+      }
+
+      Reactor rightEnclaveClass;
+      Instantiation rightEnclaveInst;
+      for(VarRef right: mainReactor.getConnections().get(i).getRightPorts()){
+        for(Instantiation enclaveInst: enclaveInstances){
+          if(((Reactor) enclaveInst.getReactorClass()).getInstantiations().contains(right.getContainer())){
+            rightEnclaveClass = (Reactor) enclaveInst.getReactorClass();
+
+            for(Input input: rightEnclaveClass.getInputs()){
+              if(input.getName() == right.getVariable().getName()){
+                VarRef newRight = factory.createVarRef();
+                newRight.setContainer(enclaveInst);
+                newRight.setVariable(input);
+                newConnection.getRightPorts().add(newRight);
+              }
+            }
+          }
+        }
+      }
+      newConnections.add(newConnection);
+      connectionsRemove.add(mainReactor.getConnections().get(i));
+    }
+    mainReactor.getConnections().addAll(newConnections);
+    mainReactor.getConnections().removeAll(connectionsRemove);
+  }
 }
 
 
