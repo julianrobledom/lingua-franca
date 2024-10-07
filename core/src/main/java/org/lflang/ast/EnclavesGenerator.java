@@ -50,8 +50,17 @@ public class EnclavesGenerator {
 
   /* Generate a LF file for each generated enclave partitioning */
   public void generateAll(Model object) {
+    Reactor mainReactor = findMainReactor(object);
+    int exclusiveReactors = 0;
+    for(Instantiation r: mainReactor.getInstantiations()){
+      if(r.getName() == "trace_generator"){
+        exclusiveReactors = mainReactor.getInstantiations().indexOf(r);
+      }
+    }
+
+
     int[][] adjMat = generateAdjacencyMatrix(object);
-    List<List<List<Integer>>> enclaves = gp.findPartitions(adjMat);
+    List<List<List<Integer>>> enclaves = gp.findPartitions(adjMat, exclusiveReactors);
 
     for (int i=0; i < enclaves.size(); i++){
         generateLF(object, enclaves.get(i), i);

@@ -7,6 +7,8 @@ import org.apache.commons.math3.linear.RealMatrix;
 //import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 
 public class GraphPartitioning {
+    private static int[][] am;
+    private static int ex;
 
     public static List<List<List<Integer>>> getAllNodeCombination(List<Integer> ns, int m) {
         int n = ns.size();
@@ -25,22 +27,29 @@ public class GraphPartitioning {
         for (int j = 0; j < n; j++) {
             ps.get(a[j + 1]).add(ns.get(j));
         }
-        return ps;
+        if(checkPartition(ps)){
+            return ps;
+        }
+        return null;
     }
 
     private static List<List<List<Integer>>> f(int mu, int nu, int sigma, int n, int[] a, List<Integer> ns, int m) {
         List<List<List<Integer>>> result = new ArrayList<>();
+        List<List<Integer>> ps;
         if (mu == 2) {
-            result.add(visit(n, a, ns, m));
+            ps = visit(n, a, ns, m);
+            if(ps != null) result.add(ps);
         } else {
             result.addAll(f(mu - 1, nu - 1, (mu + sigma) % 2, n, a, ns, m));
         }
         if (nu == mu + 1) {
             a[mu] = mu - 1;
-            result.add(visit(n, a, ns, m));
+            ps = visit(n, a, ns, m);
+            if(ps != null) result.add(ps);
             while (a[nu] > 0) {
                 a[nu] = a[nu] - 1;
-                result.add(visit(n, a, ns, m));
+                ps = visit(n, a, ns, m);
+                if(ps != null) result.add(ps);
             }
         } else if (nu > mu + 1) {
             if ((mu + sigma) % 2 == 1) {
@@ -62,17 +71,21 @@ public class GraphPartitioning {
                 }
             }
         }
+        //System.out.println(Arrays.deepToString(result.toArray()));
         return result;
     }
 
     private static List<List<List<Integer>>> b(int mu, int nu, int sigma, int n, int[] a, List<Integer> ns, int m) {
         List<List<List<Integer>>> result = new ArrayList<>();
+        List<List<Integer>> ps;
         if (nu == mu + 1) {
             while (a[nu] < mu - 1) {
-                result.add(visit(n, a, ns, m));
+                ps = visit(n, a, ns, m);
+                if(ps != null) result.add(ps);
                 a[nu] = a[nu] + 1;
             }
-            result.add(visit(n, a, ns, m));
+            ps = visit(n, a, ns, m);
+            if(ps != null) result.add(ps);
             a[mu] = 0;
         } else if (nu > mu + 1) {
             if ((a[nu] + sigma) % 2 == 1) {
@@ -95,14 +108,65 @@ public class GraphPartitioning {
             }
         }
         if (mu == 2) {
-            result.add(visit(n, a, ns, m));
+            ps = visit(n, a, ns, m);
+            if(ps != null) result.add(ps);
         } else {
             result.addAll(b(mu - 1, nu - 1, (mu + sigma) % 2, n, a, ns, m));
         }
         return result;
     }
 
+    public static boolean checkPartition(List<List<Integer>> subset) {
+        boolean valid = true;
+        int[] aaa = {ex};
+        for (List<Integer> partition : subset) {
+            int[] aae = partition.stream().mapToInt(i->i).toArray();
+            if(Arrays.equals(aaa, aae)){
+                valid = false;
+            }
+        }
+        if(!valid){
+            valid = true;
+        }
+        else{
+            return false;
+        }
+        for (List<Integer> partition : subset) {
+            if (partition.size() > 1) {
+
+                // Find adj matrix for subgraph
+                int[][] result = new int[partition.size()][partition.size()];
+                for (int i = 0; i < partition.size(); i++) {
+                    for (int j = 0; j < partition.size(); j++) {
+                        if(am[partition.get(i)][partition.get(j)] == 1){
+                            result[i][j] = am[partition.get(i)][partition.get(j)];
+                        }
+                    }
+                }
+
+                // Lemma 2.3.1. Let 𝐺=(𝑉,𝐸) be a graph, and let 0=𝜆1≤𝜆2≤⋯≤𝜆𝑛 be the
+                // eigenvalues of its Laplacian matrix. Then, 𝜆2>0 if and only if 𝐺 is connected.
+                double lapMat[][] = laplacian_matrix(result);
+                RealMatrix testMatrix = MatrixUtils.createRealMatrix(lapMat);
+                EigenDecomposition eigenDecomposition = new EigenDecomposition(testMatrix);
+                double[] eigenvalues = eigenDecomposition.getRealEigenvalues();
+                Arrays.sort(eigenvalues);
+
+                if (eigenvalues[1] <= 0) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+        if (valid) {
+            //myList.add(subset);
+            return true;
+        }
+        return false;
+    }
+
     public static List<List<List<Integer>>> findPartitionsOfSize(int[][] adjMat, int k) {
+        am = adjMat;
         int numNodes = adjMat.length;
         List<Integer> nodes = new ArrayList<>();
         for (int i = 0; i < numNodes; i++) {
@@ -110,43 +174,7 @@ public class GraphPartitioning {
         }
         List<List<List<Integer>>> a = getAllNodeCombination(nodes, k);
 
-        // Filter Partitions: Each enclave must be a connected subgraph of the G
-        List<List<List<Integer>>> myList = new ArrayList<>();
-        for (List<List<Integer>> subset : a) {
-            boolean valid = true;
-            for (List<Integer> partition : subset) {
-                if (partition.size() > 1) {
-
-                    // Find adj matrix for subgraph
-                    int[][] result = new int[partition.size()][partition.size()];
-                    for (int i = 0; i < partition.size(); i++) {
-                        for (int j = 0; j < partition.size(); j++) {
-                            if(adjMat[partition.get(i)][partition.get(j)] == 1){
-                                result[i][j] = adjMat[partition.get(i)][partition.get(j)];
-                            }
-                        }
-                    }
-
-                    // Lemma 2.3.1. Let 𝐺=(𝑉,𝐸) be a graph, and let 0=𝜆1≤𝜆2≤⋯≤𝜆𝑛 be the 
-                    // eigenvalues of its Laplacian matrix. Then, 𝜆2>0 if and only if 𝐺 is connected.
-                    double lapMat[][] = laplacian_matrix(result);
-                    RealMatrix testMatrix = MatrixUtils.createRealMatrix(lapMat);
-                    EigenDecomposition eigenDecomposition = new EigenDecomposition(testMatrix);
-                    double[] eigenvalues = eigenDecomposition.getRealEigenvalues();
-                    Arrays.sort(eigenvalues);
-
-                    if (eigenvalues[1] <= 0) {
-                        valid = false;
-                        break;
-                    }
-                }
-            }
-            if (valid) {
-                myList.add(subset);
-            }
-        }
-
-        return myList;
+        return a;
     }
 
 
@@ -195,7 +223,8 @@ public class GraphPartitioning {
         return result;
     }
 
-    public static List<List<List<Integer>>> findPartitions(int[][] adjMatrix) {
+    public static List<List<List<Integer>>> findPartitions(int[][] adjMatrix, int exc) {
+        ex = exc;
         List<List<List<Integer>>> graphs = new ArrayList<List<List<Integer>>>();
         int numNodes = adjMatrix[0].length;
         for (int i = 2; i <= numNodes; i++) {
