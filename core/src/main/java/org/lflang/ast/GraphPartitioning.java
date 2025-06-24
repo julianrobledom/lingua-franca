@@ -230,6 +230,7 @@ public class GraphPartitioning {
         for (int i = 2; i <= numNodes; i++) {
             graphs.addAll(findPartitionsOfSize(adjMatrix, i));
         }
+        System.out.println(graphs);
         return graphs;
     }
 }

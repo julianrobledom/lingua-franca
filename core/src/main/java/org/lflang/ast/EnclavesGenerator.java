@@ -53,7 +53,7 @@ public class EnclavesGenerator {
     Reactor mainReactor = findMainReactor(object);
     int exclusiveReactors = 0;
     for(Instantiation r: mainReactor.getInstantiations()){
-      if(r.getName() == "trace_generator"){
+      if(r.getName() == "trace_generator" || r.getName() == "dispatcher"){
         exclusiveReactors = mainReactor.getInstantiations().indexOf(r);
       }
     }
@@ -78,7 +78,7 @@ public class EnclavesGenerator {
   /* Generate adjacency matrix for a given graph */
   public int[][] generateAdjacencyMatrix(Model object) {
     Reactor mainReactor = findMainReactor(object);
-      
+
     // initialize adjacent matrix
     int adjMatSize = mainReactor.getInstantiations().size();
     int[][] adjMat = new int[adjMatSize][adjMatSize];
@@ -98,7 +98,7 @@ public class EnclavesGenerator {
 
   /* Generate output file for a given partitioning */
   public MalleableString generateLF(
-    Model model, 
+    Model model,
     List<List<Integer>> partitioning,
     Integer programCounter
   ) {
@@ -107,6 +107,8 @@ public class EnclavesGenerator {
       Reactor mainReactor = findMainReactor(object);
       mainReactor.setName("enclaves_lf_" + programCounter);
       enclaveCounter = 0;
+
+      int num_duplicates = 4;
 
       // this is useful because as we switch instantiations from main class to a given enclave
       // the index of instantiations change
@@ -135,7 +137,7 @@ public class EnclavesGenerator {
       List<Instantiation> duplicatedReactor = new ArrayList<Instantiation>();
       int numInst = mainReactor.getInstantiations().size();
       int index = mainReactor.getInstantiations().size();
-      for(int i=0; i<9; i++){
+      for(int i=0; i<num_duplicates; i++){
         for(int j=1; j< numInst; j++){
           Instantiation inst = mainReactor.getInstantiations().get(j);
           Instantiation newInst = EcoreUtil.copy(inst);
@@ -149,7 +151,7 @@ public class EnclavesGenerator {
 
       List<Connection> duplicatedConnection = new ArrayList<Connection>();
       //int index = mainReactor.getConnections().size();
-      for(int i=0; i<9; i++){
+      for(int i=0; i<num_duplicates; i++){
         int numConn = mainReactor.getConnections().size();
         for(int j=0; j< numConn; j++){
           Connection conn = mainReactor.getConnections().get(j);
@@ -162,7 +164,7 @@ public class EnclavesGenerator {
           }
         }
       }
-      for(int i=0; i<9; i++){
+      for(int i=0; i<num_duplicates; i++){
         int numConn = mainReactor.getConnections().size();
         for(int j=0; j< numConn; j++){
           Connection conn = mainReactor.getConnections().get(j);
