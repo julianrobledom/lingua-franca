@@ -21,6 +21,8 @@ import org.lflang.target.property.LoggingProperty;
 import org.lflang.target.property.NoCompileProperty;
 import org.lflang.target.property.NoSourceMappingProperty;
 import org.lflang.target.property.GenerateEnclavesProperty;
+import org.lflang.target.property.NumEnclaveReplicasProperty;
+import org.lflang.target.property.EnclaveListProperty;
 import org.lflang.target.property.PrintStatisticsProperty;
 import org.lflang.target.property.RuntimeVersionProperty;
 import org.lflang.target.property.SchedulerProperty;
@@ -158,7 +160,20 @@ public class Lfc extends CliBase {
     names = {"--generate-enclaves"},
     arity = "0",
     description = "Take a non enclave program and generate all possible combination of enclaves.")
-private Boolean generateEnclaves;
+  private Boolean generateEnclaves;
+
+  @Option(
+    names = {"--num-enclave-replicas"},
+    description = "Number of pipeline replicas. To be used only if --generate-enclaves=TRUE"
+          + " and the input program is a pipeline.")
+  private Integer numEnclaveReplicas;
+
+  @Option(
+    names = {"--enclave-list"},
+    arity = "0",
+    description = "List of enclaves. To be used only if --generate-enclaves=TRUE"
+          + " and the input program is a pipeline.")
+  private String enclaveList;
 
   /** Mutually exclusive options related to threading. */
   static class ThreadingMutuallyExclusive {
@@ -372,6 +387,16 @@ private Boolean generateEnclaves;
     return workers;
   }
 
+  /** Return the number of replicas specified, or {@code null} if none was specified. */
+  private Integer getNumEnclaveReplicas() {
+    return numEnclaveReplicas;
+  }
+
+  /** Return a list of reactors to embed into enclaves, or {@code null} if none was specified. */
+  private String getEnclavesList() {
+    return enclaveList;
+  }
+
   /** Check the values of the commandline arguments and return them. */
   public GeneratorArguments getArgs() {
 
@@ -396,6 +421,9 @@ private Boolean generateEnclaves;
             new Argument<>(SingleThreadedProperty.INSTANCE, getSingleThreaded()),
             new Argument<>(TracingProperty.INSTANCE, getTracingOptions()),
             new Argument<>(WorkersProperty.INSTANCE, getWorkers()),
-            new Argument<>(GenerateEnclavesProperty.INSTANCE, generateEnclaves)));
+            new Argument<>(GenerateEnclavesProperty.INSTANCE, generateEnclaves),
+            new Argument<>(NumEnclaveReplicasProperty.INSTANCE, getNumEnclaveReplicas()),
+            new Argument<>(EnclaveListProperty.INSTANCE, getEnclavesList())
+          ));
   }
 }

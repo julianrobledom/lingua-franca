@@ -46,6 +46,7 @@ import org.lflang.target.property.FilesProperty;
 import org.lflang.target.property.KeepaliveProperty;
 import org.lflang.target.property.NoRuntimeValidationProperty;
 import org.lflang.target.property.NoSourceMappingProperty;
+import org.lflang.target.property.NumEnclaveReplicasProperty;
 import org.lflang.target.property.PlatformProperty;
 import org.lflang.target.property.PrintStatisticsProperty;
 import org.lflang.target.property.ProtobufsProperty;
@@ -61,6 +62,7 @@ import org.lflang.target.property.TracingProperty;
 import org.lflang.target.property.VerifyProperty;
 import org.lflang.target.property.WorkersProperty;
 import org.lflang.target.property.GenerateEnclavesProperty;
+import org.lflang.target.property.EnclaveListProperty;
 
 /**
  * Enumeration of targets and their associated properties.
@@ -622,7 +624,9 @@ public enum Target {
               RuntimeVersionProperty.INSTANCE,
               TracingProperty.INSTANCE,
               WorkersProperty.INSTANCE,
-              GenerateEnclavesProperty.INSTANCE
+              GenerateEnclavesProperty.INSTANCE,
+              NumEnclaveReplicasProperty.INSTANCE,
+              EnclaveListProperty.INSTANCE
               );
       case Python ->
           config.register(

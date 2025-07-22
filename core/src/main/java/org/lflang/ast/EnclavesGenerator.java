@@ -44,28 +44,78 @@ public class EnclavesGenerator {
   private ToLf lf = new ToLf();
   private GraphPartitioning gp = new GraphPartitioning();
   private int enclaveCounter = 0;
+  private Integer numReplicas = 0;
+
+  public EnclavesGenerator(Integer numReplicas) {
+    this.numReplicas = numReplicas - 1;
+  }
 
   // Useful maps for swithching between reactor classes and their corresponding instantiations
   private Map<Integer, Instantiation> mapReactorIndexToReactorInst = new HashMap<Integer, Instantiation>();
 
   /* Generate a LF file for each generated enclave partitioning */
-  public void generateAll(Model object) {
+  public List<Model> generateAll(Model object) {
+    List<Model> enclaveModels = new ArrayList<>();
     Reactor mainReactor = findMainReactor(object);
+
+    // Instead of being hardcoded, the exclusiveReactors (Src node) should be automatically
+    // recognized.
     int exclusiveReactors = 0;
     for(Instantiation r: mainReactor.getInstantiations()){
+      // This if doesn't work, it is not clear why
       if(r.getName() == "trace_generator" || r.getName() == "dispatcher"){
         exclusiveReactors = mainReactor.getInstantiations().indexOf(r);
       }
     }
 
-
+    // find partitions of the graph and generate LF files for each partition
     int[][] adjMat = generateAdjacencyMatrix(object);
     List<List<List<Integer>>> enclaves = gp.findPartitions(adjMat, exclusiveReactors);
-
     for (int i=0; i < enclaves.size(); i++){
-        generateLF(object, enclaves.get(i), i);
+        enclaveModels.add(generateLF(object, enclaves.get(i), i));
     }
-    return;
+    return enclaveModels;
+  }
+
+  public List<Model> generateFromList(Model object, List<List<String>> enclaveList) {
+    List<Model> enclaveModels = new ArrayList<>();
+    Reactor mainReactor = findMainReactor(object);
+    List<List<Integer>> enclaveIndices = new ArrayList<>();
+
+    // Instead of being hardcoded, the exclusiveReactors (Src node) should be automatically
+    // recognized.
+    List<Integer> exclusiveReactors = List.of(0);
+    for(Instantiation r: mainReactor.getInstantiations()){
+      // This if doesn't work, it is not clear why
+      if(r.getName() == "dispatch_generator") {
+        exclusiveReactors = List.of(mainReactor.getInstantiations().indexOf(r));
+      }
+    }
+    enclaveIndices.add(exclusiveReactors);
+
+    // Create a map from reactor names to their indices
+    Map<String, Integer> nameToIndex = new HashMap<>();
+    List<Instantiation> instantiations = mainReactor.getInstantiations();
+    for (int i = 0; i < instantiations.size(); i++) {
+      nameToIndex.put(instantiations.get(i).getName(), i);
+    }
+
+    // Convert enclave names to indices
+    for (List<String> group : enclaveList) {
+      List<Integer> indices = new ArrayList<>();
+      for (String name : group) {
+          Integer idx = nameToIndex.get(name);
+          if (idx == null) {
+              throw new IllegalArgumentException("Reactor name not found: " + name);
+          }
+          indices.add(idx);
+      }
+      enclaveIndices.add(indices);
+    }
+
+    // Generate LF files for the enclave partition in the input list
+    enclaveModels.add(generateLF(object, enclaveIndices, 0));
+    return enclaveModels;
   }
 
   public Reactor findMainReactor(Model object){
@@ -97,7 +147,7 @@ public class EnclavesGenerator {
 
 
   /* Generate output file for a given partitioning */
-  public MalleableString generateLF(
+  public Model generateLF(
     Model model,
     List<List<Integer>> partitioning,
     Integer programCounter
@@ -107,8 +157,6 @@ public class EnclavesGenerator {
       Reactor mainReactor = findMainReactor(object);
       mainReactor.setName("enclaves_lf_" + programCounter);
       enclaveCounter = 0;
-
-      int num_duplicates = 4;
 
       // this is useful because as we switch instantiations from main class to a given enclave
       // the index of instantiations change
@@ -137,7 +185,7 @@ public class EnclavesGenerator {
       List<Instantiation> duplicatedReactor = new ArrayList<Instantiation>();
       int numInst = mainReactor.getInstantiations().size();
       int index = mainReactor.getInstantiations().size();
-      for(int i=0; i<num_duplicates; i++){
+      for(int i=0; i<this.numReplicas; i++){
         for(int j=1; j< numInst; j++){
           Instantiation inst = mainReactor.getInstantiations().get(j);
           Instantiation newInst = EcoreUtil.copy(inst);
@@ -151,7 +199,7 @@ public class EnclavesGenerator {
 
       List<Connection> duplicatedConnection = new ArrayList<Connection>();
       //int index = mainReactor.getConnections().size();
-      for(int i=0; i<num_duplicates; i++){
+      for(int i=0; i<this.numReplicas; i++){
         int numConn = mainReactor.getConnections().size();
         for(int j=0; j< numConn; j++){
           Connection conn = mainReactor.getConnections().get(j);
@@ -164,7 +212,7 @@ public class EnclavesGenerator {
           }
         }
       }
-      for(int i=0; i<num_duplicates; i++){
+      for(int i=0; i<this.numReplicas; i++){
         int numConn = mainReactor.getConnections().size();
         for(int j=0; j< numConn; j++){
           Connection conn = mainReactor.getConnections().get(j);
@@ -187,8 +235,8 @@ public class EnclavesGenerator {
       catch (IOException e) {
         System.err.println("Error: " + e.getMessage());
       }
-      //System.exit(0);
-      return lf.caseModel(object);
+
+      return object;
   }
 
   public Instantiation createEnclaveReactor(Model object){

@@ -64,12 +64,17 @@ import org.lflang.lf.Reactor;
 import org.lflang.lf.Model;
 import org.lflang.target.Target;
 import org.lflang.target.TargetConfig;
+import org.lflang.target.property.EnclaveListProperty;
 import org.lflang.target.property.FilesProperty;
 import org.lflang.target.property.GenerateEnclavesProperty;
+import org.lflang.target.property.NoCompileProperty;
+import org.lflang.target.property.NumEnclaveReplicasProperty;
 import org.lflang.target.property.SingleThreadedProperty;
 import org.lflang.target.property.VerifyProperty;
 import org.lflang.util.FileUtil;
 import org.lflang.validation.AbstractLFValidator;
+import org.eclipse.xtext.xbase.lib.IteratorExtensions;
+import com.google.common.collect.Iterators;
 
 /**
  * Generator base class for specifying core functionality that all code generators should have.
@@ -182,6 +187,85 @@ public abstract class GeneratorBase extends AbstractLFValidator {
   }
 
   /**
+   * Return a list of LF file names that have been generated. If enclaves have not been generated,
+   * then return an empty list.
+   *
+   * <p>This method is used to generate enclaves for the target language, if the target configuration
+   * specifies that enclaves should be generated.
+   *
+   * @return A list of LF file names.
+   */
+  public /*List<String>*/void getEnclaveModels() {
+    List<Model> enclaveModels = new ArrayList<>();
+    /*List<String> enclaveNames = new ArrayList<>();*/
+
+    // If the target configuration specifies that enclaves should be generated,
+    if (this.targetConfig.isSet(GenerateEnclavesProperty.INSTANCE)) {
+
+      // Get the number of replicas to generate from the target configuration.
+      Integer numReplicas = this.targetConfig.get(NumEnclaveReplicasProperty.INSTANCE);
+
+      // If the enclave list is set, then we generate enclaves based on that list.
+      if (this.targetConfig.isSet(EnclaveListProperty.INSTANCE)){
+        String enclaves = this.targetConfig.get(EnclaveListProperty.INSTANCE);
+
+        // check if the enclaves string matches the expected pattern
+        String pattern = "\\{(\\[(\\s*\\w+\\s*(,\\s*\\w+\\s*)*)?\\],?)+\\}";
+        if (enclaves == null || !enclaves.matches(pattern)) {
+          throw new IllegalArgumentException(
+              enclaves +
+              ": Input must have the form {[reactor1, reactor2,...],[reactor3, reactor4,...],...}"
+          );
+        }
+        else {
+          // Remove the outer braces "{}"
+          String trimmed = enclaves.substring(1, enclaves.length() - 1);
+          List<List<String>> enclaveList = new ArrayList<>();
+          // Split by "],[" and remove brackets
+          for (String group : trimmed.split("\\],\\[")) {
+            String clean = group.replace("[", "").replace("]", "").trim();
+            if (!clean.isEmpty()) {
+              List<String> reactors = new ArrayList<>();
+              for (String reactor : clean.split(",")) {
+                  String reactorName = reactor.trim();
+                  if (!reactorName.isEmpty()) {
+                      reactors.add(reactorName);
+                  }
+              }
+              enclaveList.add(reactors);
+            }
+          }
+          enclaveModels = createEnclavesFromList(numReplicas, enclaveList);
+        }
+      }
+      else{
+        enclaveModels = createEnclaves(numReplicas);
+      }
+
+      // Get the names of the generated LF files.
+      for(Model model : enclaveModels) {
+        Reactor mainReactorName = IteratorExtensions.findFirst(
+          Iterators.filter(model.getReactors().iterator(), Reactor.class), Reactor::isMain);
+
+        // Run the LFC compiler to generate the binaries.
+        if (!this.targetConfig.isSet(NoCompileProperty.INSTANCE)) {
+          try{
+            Process p = new ProcessBuilder("lfc",
+                "src/" + mainReactorName.getName()+ ".lf")
+                .redirectErrorStream(true)
+                .start();
+            p.getInputStream().transferTo(System.out);
+          } catch (IOException e) {
+              System.err.println("Error: " + e.getMessage());
+          }
+        }
+      }
+    }
+    return;
+  }
+
+
+  /**
    * Generate code from the Lingua Franca model contained by the specified resource.
    *
    * <p>This is the main entry point for code generation. This base class finds all reactor class
@@ -194,6 +278,8 @@ public abstract class GeneratorBase extends AbstractLFValidator {
    *     object is also used to relay CLI arguments.
    */
   public void doGenerate(Resource resource, LFGeneratorContext context) {
+
+    getEnclaveModels();
 
     printInfo(context);
 
@@ -238,11 +324,6 @@ public abstract class GeneratorBase extends AbstractLFValidator {
         getTarget().setsKeepAliveOptionAutomatically(),
         targetConfig,
         messageReporter);
-
-    if (this.targetConfig.isSet(GenerateEnclavesProperty.INSTANCE)) {
-      createEnclaves();
-      System.exit(1);
-    }
 
     // Load target properties for all resources.
     allResources.forEach(r -> loadTargetProperties(r));
@@ -289,14 +370,28 @@ public abstract class GeneratorBase extends AbstractLFValidator {
     }
   }
 
-  protected void createEnclaves() {
+  protected List<Model> createEnclaves(Integer numReplicas) {
+    List<Model> enclaveModels = new ArrayList<>();
     Iterable<EObject> nodes =
         IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
     nodes = IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
     for (Model model : Iterables.filter(nodes, Model.class)) {
-      var serializer = new EnclavesGenerator();
-      serializer.generateAll(model);
+      var serializer = new EnclavesGenerator(numReplicas);
+      enclaveModels = serializer.generateAll(model);
     }
+    return enclaveModels;
+  }
+
+  protected List<Model> createEnclavesFromList(Integer numReplicas, List<List<String>> enclaveList) {
+    List<Model> enclaveModels = new ArrayList<>();
+    Iterable<EObject> nodes =
+        IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
+    nodes = IteratorExtensions.toIterable(context.getFileConfig().resource.getAllContents());
+    for (Model model : Iterables.filter(nodes, Model.class)) {
+      var serializer = new EnclavesGenerator(numReplicas);
+      enclaveModels = serializer.generateFromList(model, enclaveList);
+    }
+    return enclaveModels;
   }
 
   /**
